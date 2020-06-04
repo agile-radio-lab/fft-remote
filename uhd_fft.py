@@ -98,6 +98,7 @@ class UhdFft():
     def antenna_id(self, val):
         self._antenna_id = int(val)
         self.update_antenna()
+        self.update_config()
 
     @property
     def antenna_name(self):
@@ -107,6 +108,7 @@ class UhdFft():
     def antenna_name(self, val):
         self._antenna_id = self._antennas.index(val)
         self.update_antenna()
+        self.update_config()
 
     def __init__(self,
                  center_freq=900e6,
@@ -119,8 +121,8 @@ class UhdFft():
         self._usrp = uhd.usrp.MultiUSRP()
         self._antennas = self._usrp.get_rx_antennas(self._channel_id)
 
-        self.update_config()
         self.update_antenna()
+        self.update_config()
 
     def stop_streamer(self):
         if self._streamer:
@@ -151,14 +153,16 @@ class UhdFft():
         # self.start_streamer()
 
     def update_usrp_params(self):
-        tune_req = uhd.types.TuneRequest(self._center_freq, self._lo_offset)
-        self._usrp.set_rx_freq(tune_req, self._channel_id)
+        tune_req = uhd.types.TuneRequest(
+            self._center_freq, self._lo_offset)  #
+        r = self._usrp.set_rx_freq(tune_req, self._channel_id)
         self._usrp.set_rx_gain(self._gain, self._channel_id)
         self._usrp.set_rx_rate(self._sampling_rate, self._channel_id)
+        # self._usrp.set_rx_bandwidth(5e6, self._channel_id)
 
     def update_antenna(self):
         if len(self._antennas) <= self._antenna_id:
-            print("Antenna %d is out of range" % self._antenna_id)
+            print("Antenna id %d is out of range" % self._antenna_id)
             print("Available: %s" % ", ".join(self._antennas))
             return False
 
@@ -185,7 +189,7 @@ class UhdFft():
         result = np.nan_to_num(10.0 * np.log10(result))
         result = np.abs(result)
         return result
-        
+
     def usrp_recv(self):
         self.start_streamer()
         metadata = uhd.types.RXMetadata()
@@ -204,31 +208,33 @@ class UhdFft():
                 recv_samps += real_samps
 
         samples = samples[self._channel_id]
+        self.stop_streamer()
+
         n_fft_steps = int(np.floor(len(samples)/self._fft_size))
 
         freq_result = np.zeros([n_fft_steps, self._fft_size])
         for i in range(n_fft_steps):
             bins = -1*self.psd(samples[i*self._fft_size:(i+1)*self._fft_size])
             freq_result[i] = bins
-        self.stop_streamer()
         return freq_result
 
     def format_freq_ticks(self, ticks):
-        return (self._start_freq + int(self._freq_res) * ticks)//1e6
+        return (self._start_freq + int(self._freq_res) * ticks)/1e6
 
     def format_time_ticks(self, ticks):
         return np.round(self._time_res*ticks*1e3)
 
     def plot_spectogram(self, ax, freq_result):
         cmap = plt.get_cmap("inferno")
-        cf = ax.pcolormesh(freq_result, cmap=cmap, vmax=self._vmax, vmin=self._vmin)
+        cf = ax.pcolormesh(freq_result, cmap=cmap,
+                           vmax=self._vmax, vmin=self._vmin)
         ax.set_yticklabels(self.format_time_ticks(ax.get_yticks()))
         ax.set_ylabel("Time [ms]")
         return cf
 
-    def plot_avg_power(self, ax, freq_result, opacity=.9, label=""):
+    def plot_avg_power(self, ax, freq_result, opacity=.9, label="", color=None):
         avg_power = np.mean(freq_result, axis=0)
-        ax.plot(avg_power, alpha=opacity, label=label)
+        ax.plot(avg_power, alpha=opacity, label=label, color=color)
         ax.set_xlabel("Frequency [MHz]")
         ax.set_ylabel("Power [dB]")
         ax.set_xticklabels(
