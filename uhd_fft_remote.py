@@ -14,6 +14,8 @@ class UhdFftRemote():
     room_id = "test"
     params_thread = None
     running = True
+    params_update_interval = 0.25
+    update_interval = 0.1
 
     def __init__(self, base_url="http://localhost:8000", room_id="test"):
         self.uhd_fft = UhdFft(center_freq=796e6,
@@ -40,7 +42,7 @@ class UhdFftRemote():
                 print("Error receiving remote params...")
                 print(err)
             finally:
-                time.sleep(.5)
+                time.sleep(self.params_update_interval)
         self.running = False
 
     def recieve_params(self):
@@ -124,5 +126,5 @@ class UhdFftRemote():
                 print("Error measuring...")
                 print(err)
             finally:
-                time.sleep(.5)
+                time.sleep(self.update_interval)
         self.running = False
